@@ -11,7 +11,7 @@ const renderFileAsync = promisify(twig.renderFile);
 // Get the three most recent commits
 export function getRecentCommits(count = 3) {
   try {
-    const format = '--pretty=format:%h|||%s|||%b';
+    const format = '--pretty=format:%h\\|\\|\\|%s\\|\\|\\|%b';
     const output = execSync(`git log -${count} ${format}`).toString().trim();
 
     return output.split('\n').map(line => {
@@ -19,7 +19,7 @@ export function getRecentCommits(count = 3) {
       return {
         hash,
         subject,
-        body: body.trim()
+        body: body ? body.trim() : ''
       };
     });
   } catch (error) {
@@ -94,16 +94,16 @@ export async function main() {
 
   // Get ticket number and PR title first
   const ticketNumber = await input({
-    message: 'Ticket number (e.g., JIRA-123):',
+    message: '🎫 Ticket number (e.g., JIRA-123, leave empty if none):',
   });
 
   const prTitle = await input({
-    message: 'Pull Request title:',
+    message: '📝 Pull Request title:',
   });
 
   // Ask about tests
   const hasTests = await confirm({
-    message: 'Does this PR include tests?',
+    message: '✅ Does this PR include tests?',
     default: false
   });
 
@@ -127,13 +127,13 @@ export async function main() {
     }
 
     const includeCommit = await confirm({
-      message: 'Include this commit in PR description?'
+      message: '🔄 Include this commit in PR description?'
     });
 
     if (includeCommit) {
       // Directly present the edit field with default value
       const message = await input({
-        message: 'Edit description for PR:',
+        message: '✏️ Edit description for PR:',
         default: commit.subject
       });
 
@@ -145,24 +145,25 @@ export async function main() {
   const templatePath = getTemplatePath();
 
   const renderedTemplate = await renderFileAsync(templatePath, {
-    ticket_number: ticketNumber,
+    ticket_number: ticketNumber || '',
     changes,
-    has_tests: hasTests
+    has_tests: hasTests,
+    has_ticket: !!ticketNumber
   });
 
   console.log('\n📋 PR Preview:');
-  console.log(`Title: [${ticketNumber}] ${prTitle}`);
+  console.log(`Title: ${ticketNumber ? `[${ticketNumber}] ` : ''}${prTitle}`);
   console.log('\nBody:');
   console.log(renderedTemplate);
 
   // Confirm PR creation
   const confirmCreate = await confirm({
-    message: 'Create this Pull Request?',
+    message: '🚀 Create this Pull Request?',
     default: true
   });
 
   if (confirmCreate) {
-    const fullTitle = `[${ticketNumber}] ${prTitle}`;
+    const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
     const result = await createPR(fullTitle, renderedTemplate);
 
     if (result.success) {
