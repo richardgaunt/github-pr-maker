@@ -94,7 +94,7 @@ export async function main() {
 
   // Get ticket number and PR title first
   const ticketNumber = await input({
-    message: '🎫 Ticket number (e.g., JIRA-123):',
+    message: '🎫 Ticket number (e.g., JIRA-123, leave empty if none):',
   });
 
   const prTitle = await input({
@@ -145,13 +145,14 @@ export async function main() {
   const templatePath = getTemplatePath();
 
   const renderedTemplate = await renderFileAsync(templatePath, {
-    ticket_number: ticketNumber,
+    ticket_number: ticketNumber || '',
     changes,
-    has_tests: hasTests
+    has_tests: hasTests,
+    has_ticket: !!ticketNumber
   });
 
   console.log('\n📋 PR Preview:');
-  console.log(`Title: [${ticketNumber}] ${prTitle}`);
+  console.log(`Title: ${ticketNumber ? `[${ticketNumber}] ` : ''}${prTitle}`);
   console.log('\nBody:');
   console.log(renderedTemplate);
 
@@ -162,7 +163,7 @@ export async function main() {
   });
 
   if (confirmCreate) {
-    const fullTitle = `[${ticketNumber}] ${prTitle}`;
+    const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
     const result = await createPR(fullTitle, renderedTemplate);
 
     if (result.success) {
