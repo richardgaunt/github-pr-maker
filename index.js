@@ -94,16 +94,16 @@ export async function main() {
 
   // Get ticket number and PR title first
   const ticketNumber = await input({
-    message: 'Ticket number (e.g., JIRA-123):',
+    message: '🎫 Ticket number (e.g., JIRA-123):',
   });
 
   const prTitle = await input({
-    message: 'Pull Request title:',
+    message: '📝 Pull Request title:',
   });
 
   // Ask about tests
   const hasTests = await confirm({
-    message: 'Does this PR include tests?',
+    message: '✅ Does this PR include tests?',
     default: false
   });
 
@@ -127,13 +127,13 @@ export async function main() {
     }
 
     const includeCommit = await confirm({
-      message: 'Include this commit in PR description?'
+      message: '🔄 Include this commit in PR description?'
     });
 
     if (includeCommit) {
       // Directly present the edit field with default value
       const message = await input({
-        message: 'Edit description for PR:',
+        message: '✏️ Edit description for PR:',
         default: commit.subject
       });
 
@@ -157,7 +157,7 @@ export async function main() {
 
   // Confirm PR creation
   const confirmCreate = await confirm({
-    message: 'Create this Pull Request?',
+    message: '🚀 Create this Pull Request?',
     default: true
   });
 

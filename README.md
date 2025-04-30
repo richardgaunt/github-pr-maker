@@ -1,29 +1,55 @@
-# GitHub PR Maker
+# 🚀 GitHub PR Maker [![Tests Status](https://github.com/user/github-pr-builder/workflows/Tests/badge.svg)](https://github.com/user/github-pr-builder/actions)
 
-GitHub PR Maker generates a PR using a standard PR template and your input.
+🎯 GitHub PR Maker automatically generates polished PRs using your commit history and a standardized template!
 
-The questions for the application are:
-1/ Ticket number (eg. JIRA-123)
-2/ Pull Request title
-4/ Whether there are tests
-3/ Changes - multi-value, can many values which get saved to an array
+## ✨ Features
 
-It then enters uses the PR template in the templates directory and generates a PR summary.
+- 🔍 Scans your recent commits and lets you pick which ones to include
+- ✏️ Edit commit messages for clearer PR descriptions
+- 🧩 Uses your PR template to generate a consistent PR format
+- 🤖 Creates the PR directly via GitHub CLI
 
-Then using the `gh` tool it creates a PR on the git repository.
-The title of the PR is `[{{ticket_number}}] {{ title}}`
-The body of the PR is the generated template.
+## 🛠️ How It Works
 
+The app will prompt you for:
 
+1. 🎫 Ticket number (e.g., JIRA-123)
+2. 📝 Pull Request title
+3. ✅ Whether your changes include tests
+4. 🔄 Which recent commits to include (with ability to edit descriptions)
 
-This application uses the following:
+It then:
+- 📋 Generates a PR using your template with all provided information
+- 🔗 Creates the PR with title in format: `[TICKET-123] Your PR Title`
+- 📊 Shows you a preview before submitting
 
-- `@inquirer/prompts` for the question and input
-- `jest` for tests
-- `eslint` for JS linting
-- `twig` for the templating
+## 🚀 Usage
 
-Eslint and package.json are setup with the required versions and packages.
+```bash
+# Install dependencies
+npm install
 
-Install new packages as required and ensure all code passes tests before
-saying complete. ALL TESTS.
+# Run the PR maker
+npm start
+```
+
+## 🧰 Tech Stack
+
+- 💬 [`@inquirer/prompts`](https://github.com/SBoudrias/Inquirer.js) - Interactive CLI prompts
+- 🧪 [`jest`](https://jestjs.io/) - Testing framework
+- 🧹 [`eslint`](https://eslint.org/) - Code quality
+- 📝 [`twig`](https://github.com/twigjs/twig.js) - Templating engine
+
+## 🧪 Testing
+
+```bash
+# Run tests
+npm test
+
+# Check code style
+npm run lint
+```
+
+## 📝 License
+
+MIT
