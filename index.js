@@ -11,7 +11,7 @@ const renderFileAsync = promisify(twig.renderFile);
 // Get the three most recent commits
 export function getRecentCommits(count = 3) {
   try {
-    const format = '--pretty=format:%h|||%s|||%b';
+    const format = '--pretty=format:%h\\|\\|\\|%s\\|\\|\\|%b';
     const output = execSync(`git log -${count} ${format}`).toString().trim();
 
     return output.split('\n').map(line => {
@@ -19,7 +19,7 @@ export function getRecentCommits(count = 3) {
       return {
         hash,
         subject,
-        body: body.trim()
+        body: body ? body.trim() : ''
       };
     });
   } catch (error) {

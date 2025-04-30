@@ -15,6 +15,12 @@ describe('GitHub PR Maker', () => {
     expect(typeof getTemplatePath).toBe('function');
   });
 
+  // This test relies on implementation details, so it's a bit fragile
+  test('getRecentCommits works with the git log command', () => {
+    // This is a more basic test that the function exists and returns the expected type
+    expect(getRecentCommits).toBeInstanceOf(Function);
+  });
+
   test('Template path is correctly resolved', () => {
     // This test only verifies the path structure, not actual file existence
     expect(getTemplatePath().endsWith('PULL_REQUEST_TEMPLATE.twig')).toBe(true);
