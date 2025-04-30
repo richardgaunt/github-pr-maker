@@ -38,6 +38,37 @@ export function checkGitRepository() {
   }
 }
 
+// Get current branch name
+export function getCurrentBranch() {
+  try {
+    return execSync('git branch --show-current').toString().trim();
+  } catch {
+    return null;
+  }
+}
+
+// Check if branch is pushed to remote
+export function isBranchPushedToRemote(branchName) {
+  try {
+    // Check if the branch exists on the remote
+    execSync(`git ls-remote --heads origin ${branchName}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Push branch to remote
+export function pushBranchToRemote(branchName) {
+  try {
+    execSync(`git push -u origin ${branchName}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to push branch to remote:', error.message);
+    return false;
+  }
+}
+
 // Check if gh CLI is installed
 export function checkGhCli() {
   try {
@@ -163,6 +194,29 @@ export async function main() {
   });
 
   if (confirmCreate) {
+    // Get current branch name
+    const currentBranch = getCurrentBranch();
+
+    if (!currentBranch) {
+      console.error('\n❌ Failed to determine current branch');
+      process.exit(1);
+    }
+
+    // Check if branch is pushed to remote
+    let needsToPush = false;
+    if (!isBranchPushedToRemote(currentBranch)) {
+      console.log(`\n🔄 Branch '${currentBranch}' not found on remote. Pushing now...`);
+      needsToPush = true;
+
+      const pushSucceeded = pushBranchToRemote(currentBranch);
+      if (!pushSucceeded) {
+        console.error('\n❌ Failed to push branch to remote. Cannot create PR.');
+        process.exit(1);
+      }
+      console.log(`✅ Branch '${currentBranch}' successfully pushed to remote.`);
+    }
+
+    // Create PR
     const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
     const result = await createPR(fullTitle, renderedTemplate);
 
@@ -170,6 +224,10 @@ export async function main() {
       console.log(`\n✅ Pull Request created successfully: ${result.url}`);
     } else {
       console.error(`\n❌ Failed to create Pull Request: ${result.error}`);
+
+      if (needsToPush) {
+        console.log('\n💡 Note: Your branch was pushed to remote, but PR creation failed. You can create a PR manually.');
+      }
     }
   } else {
     console.log('\n❌ PR creation cancelled');
