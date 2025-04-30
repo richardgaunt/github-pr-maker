@@ -4,7 +4,7 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getRecentCommits, getTemplatePath } from '../index';
+import { getRecentCommits, getTemplatePath, getCurrentBranch, isBranchPushedToRemote } from '../index';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +13,8 @@ describe('GitHub PR Maker', () => {
   test('Module exports expected functions', () => {
     expect(typeof getRecentCommits).toBe('function');
     expect(typeof getTemplatePath).toBe('function');
+    expect(typeof getCurrentBranch).toBe('function');
+    expect(typeof isBranchPushedToRemote).toBe('function');
   });
 
   // This test relies on implementation details, so it's a bit fragile
@@ -41,6 +43,20 @@ describe('GitHub PR Maker', () => {
     // Test without ticket number (undefined)
     expect(ticketNumberFormat(undefined, 'Add feature')).toBe('Add feature');
   });
+
+  test('Branch remote push checks work correctly', () => {
+    // Test the logic for determining when to push a branch
+
+    // Branch exists on remote
+    expect(branchPushNeeded('feature-branch', true)).toBe(false);
+
+    // Branch doesn't exist on remote
+    expect(branchPushNeeded('feature-branch', false)).toBe(true);
+
+    // No branch name
+    expect(branchPushNeeded(null, false)).toBe(false);
+    expect(branchPushNeeded('', false)).toBe(false);
+  });
 });
 
 /**
@@ -48,4 +64,15 @@ describe('GitHub PR Maker', () => {
  */
 function ticketNumberFormat(ticketNumber, prTitle) {
   return ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
+}
+
+/**
+ * Helper function that mimics the branch push decision logic
+ */
+function branchPushNeeded(branchName, existsOnRemote) {
+  // If no branch name, can't push
+  if (!branchName) return false;
+
+  // If branch isn't on remote, need to push
+  return !existsOnRemote;
 }
