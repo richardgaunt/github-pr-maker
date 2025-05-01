@@ -80,15 +80,49 @@ export function checkGhCli() {
   }
 }
 
-// Get the template path
-export function getTemplatePath() {
-  const templatePath = path.join(process.cwd(), 'templates', 'PULL_REQUEST_TEMPLATE.twig');
+// Default PR template content as a fallback
+const DEFAULT_TEMPLATE = `{% if has_ticket %}
+## Ticket
+{{ ticket_number }}
+{% endif %}
 
+## Changes
+{% for change in changes %}
+- {{ change }}
+{% endfor %}
+
+{% if has_tests %}
+## Tests
+- ✅ Includes tests
+{% else %}
+## Tests
+- ❌ No tests included
+{% endif %}
+`;
+
+// Get the directory where the script is installed
+function getScriptDir() {
+  // Use import.meta.url to get the full URL of the current module
+  const fileUrl = import.meta.url;
+  // Convert the file URL to a system path and get the directory
+  return path.dirname(new URL(fileUrl).pathname);
+}
+
+// Get the template path or create default template
+export function getTemplatePath() {
+  // Get template ONLY from the script's installation directory
+  const scriptDir = getScriptDir();
+  const templatePath = path.join(scriptDir, 'templates', 'PULL_REQUEST_TEMPLATE.twig');
+  
+  // Check if template exists in the app installation directory
   if (!existsSync(templatePath)) {
-    throw new Error('PR template not found: ' + templatePath);
+    console.log(`🔍 Template not found in application directory: ${templatePath}`);
+    console.log('⚠️ Using default template');
+    return { isDefault: true, content: DEFAULT_TEMPLATE };
   }
 
-  return templatePath;
+  console.log(`📋 Using template from application directory: ${templatePath}`);
+  return { isDefault: false, path: templatePath };
 }
 
 // Create PR using GitHub CLI
@@ -173,15 +207,27 @@ export async function main() {
     }
   }
 
-  // Render template
-  const templatePath = getTemplatePath();
-
-  const renderedTemplate = await renderFileAsync(templatePath, {
-    ticket_number: ticketNumber || '',
-    changes,
-    has_tests: hasTests,
-    has_ticket: !!ticketNumber
-  });
+  // Get template and render it
+  const template = getTemplatePath();
+  
+  let renderedTemplate;
+  if (template.isDefault) {
+    // Render the default template string
+    renderedTemplate = twig.twig({ data: template.content }).render({
+      ticket_number: ticketNumber || '',
+      changes,
+      has_tests: hasTests,
+      has_ticket: !!ticketNumber
+    });
+  } else {
+    // Render from file
+    renderedTemplate = await renderFileAsync(template.path, {
+      ticket_number: ticketNumber || '',
+      changes,
+      has_tests: hasTests,
+      has_ticket: !!ticketNumber
+    });
+  }
 
   console.log('\n📋 PR Preview:');
   console.log(`Title: ${ticketNumber ? `[${ticketNumber}] ` : ''}${prTitle}`);
