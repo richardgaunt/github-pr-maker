@@ -18,12 +18,38 @@ It then:
 
 ## 🚀 Usage
 
+### Method 1: Local Installation
+
 ```bash
 # Install dependencies
 npm install
 
 # Run the PR maker
 npm start
+```
+
+### Method 2: Command Line Installation
+
+You can install this tool globally to use it from anywhere:
+
+```bash
+# Install globally
+npm install -g .
+
+# Run from anywhere
+gh-pr
+```
+
+### Method 3: Bash Alias
+
+You can also create a bash alias to run the tool:
+
+```bash
+# Add to your ~/.bashrc or ~/.zshrc
+alias gh-pr="node /path/to/github-pr-builder/index.js"
+
+# Then reload your shell
+source ~/.bashrc  # or source ~/.zshrc
 ```
 
 ## 🧪 Development
