@@ -48,6 +48,44 @@ export function getCurrentBranch() {
   }
 }
 
+// Get default branch name
+export function getDefaultBranch() {
+  try {
+    // Try to get the remote's default branch
+    // First get the default remote (usually origin)
+    const remote = execSync('git remote').toString().trim().split('\n')[0];
+    
+    // Then get the default branch (what HEAD points to)
+    const output = execSync(`git remote show ${remote} | grep "HEAD branch"`).toString().trim();
+    const match = output.match(/HEAD branch:\s*(.+)$/);
+    
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // Fallback to 'main' or 'master' if we can't determine it
+    return 'main';
+  } catch {
+    // Fallback to a sensible default
+    return 'main';
+  }
+}
+
+// Get list of remote branches
+export function getRemoteBranches() {
+  try {
+    // Get all remote branches, excluding HEAD reference
+    const output = execSync('git branch -r | grep -v HEAD').toString().trim();
+    
+    // Parse and clean branch names
+    return output.split('\n')
+      .map(branch => branch.trim().replace(/^origin\//, ''))
+      .filter(branch => branch !== '');
+  } catch {
+    return [];
+  }
+}
+
 // Check if branch is pushed to remote
 export function isBranchPushedToRemote(branchName) {
   try {
@@ -126,9 +164,16 @@ export function getTemplatePath() {
 }
 
 // Create PR using GitHub CLI
-export async function createPR(title, body) {
+export async function createPR(title, body, targetBranch = null) {
   try {
-    const command = `gh pr create --title "${title}" --body "${body.replace(/"/g, '\\"')}"`;
+    // Build the command with optional target branch
+    let command = `gh pr create --title "${title}" --body "${body.replace(/"/g, '\\"')}"`;
+    
+    // Add target branch if specified
+    if (targetBranch) {
+      command += ` --base "${targetBranch}"`;
+    }
+    
     const output = execSync(command).toString().trim();
     return {
       success: true,
@@ -263,9 +308,26 @@ export async function main() {
       console.log(`✅ Branch '${currentBranch}' successfully pushed to remote.`);
     }
 
-    // Create PR
+    // Get default branch for PR target
+    const defaultBranch = getDefaultBranch();
+    
+    // Get list of available remote branches for selection
+    const remoteBranches = getRemoteBranches();
+    
+    // Ask user which branch to target for PR
+    // Default to the repository's default branch
+    console.log('\n🌿 Select target branch for PR:');
+    const targetBranch = await input({
+      message: '🎯 Target branch for PR:',
+      default: defaultBranch,
+      // Optionally we could add validation that the branch exists in remoteBranches
+    });
+    
+    console.log(`📌 Creating PR targeting branch: ${targetBranch}`);
+
+    // Create PR with specified target branch
     const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
-    const result = await createPR(fullTitle, renderedTemplate);
+    const result = await createPR(fullTitle, renderedTemplate, targetBranch);
 
     if (result.success) {
       console.log(`\n✅ Pull Request created successfully: ${result.url}`);

@@ -1,6 +1,6 @@
 export default {
   testEnvironment: 'node',
-  testMatch: ['**/test/basic.test.js'],
+  testMatch: ['**/test/*.test.js'],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],

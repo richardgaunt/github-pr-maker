@@ -24,8 +24,16 @@ describe('GitHub PR Maker', () => {
   });
 
   test('Template path is correctly resolved', () => {
-    // This test only verifies the path structure, not actual file existence
-    expect(getTemplatePath().endsWith('PULL_REQUEST_TEMPLATE.twig')).toBe(true);
+    // This test only verifies the template path object
+    const template = getTemplatePath();
+    
+    // Check for default template case
+    if (template.isDefault) {
+      expect(template.content).toBeTruthy();
+    } else {
+      // Check for file path case
+      expect(template.path.endsWith('PULL_REQUEST_TEMPLATE.twig')).toBe(true);
+    }
   });
 
   test('PR title formatting with and without ticket number', () => {
