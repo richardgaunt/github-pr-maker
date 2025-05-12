@@ -1,6 +1,7 @@
 # 🚀 GitHub PR Maker 
 
-[![Tests](https://github.com/user/github-pr-builder/workflows/test/badge.svg)]
+[![Tests](https://github.com/richardgaunt/github-pr-builder/actions/workflows/test.yml/badge.svg)](https://github.com/richardgaunt/github-pr-builder/actions/workflows/test.yml)
+
 
 🎯 GitHub PR Maker generates PRs using your commit history and a standardized template.
 
