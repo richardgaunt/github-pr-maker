@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { input, confirm } from '@inquirer/prompts';
+import { input, confirm, search } from '@inquirer/prompts';
 import twig from 'twig';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
@@ -54,15 +54,15 @@ export function getDefaultBranch() {
     // Try to get the remote's default branch
     // First get the default remote (usually origin)
     const remote = execSync('git remote').toString().trim().split('\n')[0];
-    
+
     // Then get the default branch (what HEAD points to)
     const output = execSync(`git remote show ${remote} | grep "HEAD branch"`).toString().trim();
     const match = output.match(/HEAD branch:\s*(.+)$/);
-    
+
     if (match && match[1]) {
       return match[1];
     }
-    
+
     // Fallback to 'main' or 'master' if we can't determine it
     return 'main';
   } catch {
@@ -76,7 +76,7 @@ export function getRemoteBranches() {
   try {
     // Get all remote branches, excluding HEAD reference
     const output = execSync('git branch -r | grep -v HEAD').toString().trim();
-    
+
     // Parse and clean branch names
     return output.split('\n')
       .map(branch => branch.trim().replace(/^origin\//, ''))
@@ -151,7 +151,7 @@ export function getTemplatePath() {
   // Get template ONLY from the script's installation directory
   const scriptDir = getScriptDir();
   const templatePath = path.join(scriptDir, 'templates', 'PULL_REQUEST_TEMPLATE.twig');
-  
+
   // Check if template exists in the app installation directory
   if (!existsSync(templatePath)) {
     console.log(`🔍 Template not found in application directory: ${templatePath}`);
@@ -168,12 +168,12 @@ export async function createPR(title, body, targetBranch = null) {
   try {
     // Build the command with optional target branch
     let command = `gh pr create --title "${title}" --body "${body.replace(/"/g, '\\"')}"`;
-    
+
     // Add target branch if specified
     if (targetBranch) {
       command += ` --base "${targetBranch}"`;
     }
-    
+
     const output = execSync(command).toString().trim();
     return {
       success: true,
@@ -254,7 +254,7 @@ export async function main() {
 
   // Get template and render it
   const template = getTemplatePath();
-  
+
   let renderedTemplate;
   if (template.isDefault) {
     // Render the default template string
@@ -308,24 +308,24 @@ export async function main() {
       console.log(`✅ Branch '${currentBranch}' successfully pushed to remote.`);
     }
 
-    // Get default branch for PR target
     const defaultBranch = getDefaultBranch();
-    
-    // Get list of available remote branches for selection
-    const remoteBranches = getRemoteBranches();
-    
+    // Default branch gets added to the start of the array.
+    const remoteBranches = getRemoteBranches()
+      .sort((branchA, branchB) => {
+        return (branchA === defaultBranch) ? -1 : (branchB === defaultBranch) ? 1 : branchA.localeCompare(branchB);
+      })
+      .map(branch => ({ title: branch, value: branch }));
     // Ask user which branch to target for PR
     // Default to the repository's default branch
     console.log('\n🌿 Select target branch for PR:');
-    const targetBranch = await input({
+    const targetBranch = await search({
       message: '🎯 Target branch for PR:',
       default: defaultBranch,
-      // Optionally we could add validation that the branch exists in remoteBranches
+      source: (input = '') => { return remoteBranches.filter(branch => branch.title.includes(input)); },
     });
-    
+
     console.log(`📌 Creating PR targeting branch: ${targetBranch}`);
 
-    // Create PR with specified target branch
     const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
     const result = await createPR(fullTitle, renderedTemplate, targetBranch);
 
