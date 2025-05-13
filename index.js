@@ -48,6 +48,44 @@ export function getCurrentBranch() {
   }
 }
 
+// Get default branch name
+export function getDefaultBranch() {
+  try {
+    // Try to get the remote's default branch
+    // First get the default remote (usually origin)
+    const remote = execSync('git remote').toString().trim().split('\n')[0];
+    
+    // Then get the default branch (what HEAD points to)
+    const output = execSync(`git remote show ${remote} | grep "HEAD branch"`).toString().trim();
+    const match = output.match(/HEAD branch:\s*(.+)$/);
+    
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // Fallback to 'main' or 'master' if we can't determine it
+    return 'main';
+  } catch {
+    // Fallback to a sensible default
+    return 'main';
+  }
+}
+
+// Get list of remote branches
+export function getRemoteBranches() {
+  try {
+    // Get all remote branches, excluding HEAD reference
+    const output = execSync('git branch -r | grep -v HEAD').toString().trim();
+    
+    // Parse and clean branch names
+    return output.split('\n')
+      .map(branch => branch.trim().replace(/^origin\//, ''))
+      .filter(branch => branch !== '');
+  } catch {
+    return [];
+  }
+}
+
 // Check if branch is pushed to remote
 export function isBranchPushedToRemote(branchName) {
   try {
@@ -80,21 +118,62 @@ export function checkGhCli() {
   }
 }
 
-// Get the template path
-export function getTemplatePath() {
-  const templatePath = path.join(process.cwd(), 'templates', 'PULL_REQUEST_TEMPLATE.twig');
+// Default PR template content as a fallback
+const DEFAULT_TEMPLATE = `{% if has_ticket %}
+## Ticket
+{{ ticket_number }}
+{% endif %}
 
+## Changes
+{% for change in changes %}
+- {{ change }}
+{% endfor %}
+
+{% if has_tests %}
+## Tests
+- ✅ Includes tests
+{% else %}
+## Tests
+- ❌ No tests included
+{% endif %}
+`;
+
+// Get the directory where the script is installed
+function getScriptDir() {
+  // Use import.meta.url to get the full URL of the current module
+  const fileUrl = import.meta.url;
+  // Convert the file URL to a system path and get the directory
+  return path.dirname(new URL(fileUrl).pathname);
+}
+
+// Get the template path or create default template
+export function getTemplatePath() {
+  // Get template ONLY from the script's installation directory
+  const scriptDir = getScriptDir();
+  const templatePath = path.join(scriptDir, 'templates', 'PULL_REQUEST_TEMPLATE.twig');
+  
+  // Check if template exists in the app installation directory
   if (!existsSync(templatePath)) {
-    throw new Error('PR template not found: ' + templatePath);
+    console.log(`🔍 Template not found in application directory: ${templatePath}`);
+    console.log('⚠️ Using default template');
+    return { isDefault: true, content: DEFAULT_TEMPLATE };
   }
 
-  return templatePath;
+  console.log(`📋 Using template from application directory: ${templatePath}`);
+  return { isDefault: false, path: templatePath };
 }
 
 // Create PR using GitHub CLI
-export async function createPR(title, body) {
+export async function createPR(title, body, targetBranch = null) {
   try {
-    const command = `gh pr create --title "${title}" --body "${body.replace(/"/g, '\\"')}"`;
+    // Build the command with optional target branch
+    let command = `gh pr create --title "${title}" --body "${body.replace(/"/g, '\\"')}"`;
+    
+    // Add target branch if specified
+    if (targetBranch) {
+      command += ` --base "${targetBranch}"`;
+    }
+    
     const output = execSync(command).toString().trim();
     return {
       success: true,
@@ -173,15 +252,27 @@ export async function main() {
     }
   }
 
-  // Render template
-  const templatePath = getTemplatePath();
-
-  const renderedTemplate = await renderFileAsync(templatePath, {
-    ticket_number: ticketNumber || '',
-    changes,
-    has_tests: hasTests,
-    has_ticket: !!ticketNumber
-  });
+  // Get template and render it
+  const template = getTemplatePath();
+  
+  let renderedTemplate;
+  if (template.isDefault) {
+    // Render the default template string
+    renderedTemplate = twig.twig({ data: template.content }).render({
+      ticket_number: ticketNumber || '',
+      changes,
+      has_tests: hasTests,
+      has_ticket: !!ticketNumber
+    });
+  } else {
+    // Render from file
+    renderedTemplate = await renderFileAsync(template.path, {
+      ticket_number: ticketNumber || '',
+      changes,
+      has_tests: hasTests,
+      has_ticket: !!ticketNumber
+    });
+  }
 
   console.log('\n📋 PR Preview:');
   console.log(`Title: ${ticketNumber ? `[${ticketNumber}] ` : ''}${prTitle}`);
@@ -217,9 +308,26 @@ export async function main() {
       console.log(`✅ Branch '${currentBranch}' successfully pushed to remote.`);
     }
 
-    // Create PR
+    // Get default branch for PR target
+    const defaultBranch = getDefaultBranch();
+    
+    // Get list of available remote branches for selection
+    const remoteBranches = getRemoteBranches();
+    
+    // Ask user which branch to target for PR
+    // Default to the repository's default branch
+    console.log('\n🌿 Select target branch for PR:');
+    const targetBranch = await input({
+      message: '🎯 Target branch for PR:',
+      default: defaultBranch,
+      // Optionally we could add validation that the branch exists in remoteBranches
+    });
+    
+    console.log(`📌 Creating PR targeting branch: ${targetBranch}`);
+
+    // Create PR with specified target branch
     const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
-    const result = await createPR(fullTitle, renderedTemplate);
+    const result = await createPR(fullTitle, renderedTemplate, targetBranch);
 
     if (result.success) {
       console.log(`\n✅ Pull Request created successfully: ${result.url}`);
