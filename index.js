@@ -6,6 +6,12 @@ import twig from 'twig';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
 import path from 'path';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory of the current module
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 
 const renderFileAsync = promisify(twig.renderFile);
 
@@ -82,7 +88,7 @@ export function checkGhCli() {
 
 // Get the template path
 export function getTemplatePath() {
-  const templatePath = path.join(process.cwd(), 'templates', 'PULL_REQUEST_TEMPLATE.twig');
+  const templatePath = path.join(__dirname, 'templates', 'PULL_REQUEST_TEMPLATE.twig');
 
   if (!existsSync(templatePath)) {
     throw new Error('PR template not found: ' + templatePath);
