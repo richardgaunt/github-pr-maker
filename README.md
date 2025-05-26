@@ -19,6 +19,10 @@ It then:
 
 ## 🚀 Usage
 
+
+
+https://github.com/user-attachments/assets/d41693eb-f629-4e57-b149-34e6728e8a2e
+
 ### Method 1: Local Installation
 
 ```bash
