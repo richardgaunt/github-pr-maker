@@ -6,6 +6,12 @@ import twig from 'twig';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
 import path from 'path';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory of the current module
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 
 const renderFileAsync = promisify(twig.renderFile);
 

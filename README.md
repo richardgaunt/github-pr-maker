@@ -1,6 +1,7 @@
 # 🚀 GitHub PR Maker 
 
-[![Tests](https://github.com/user/github-pr-builder/workflows/test/badge.svg)]
+[![Tests](https://github.com/richardgaunt/github-pr-maker/actions/workflows/test.yml/badge.svg)](https://github.com/richardgaunt/github-pr-maker/actions/workflows/test.yml)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/richardgaunt/github-pr-maker?utm_source=oss&utm_medium=github&utm_campaign=richardgaunt%2Fgithub-pr-maker&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 🎯 GitHub PR Maker generates PRs using your commit history and a standardized template.
 
@@ -17,6 +18,10 @@ It then:
 - 📋 Generates a PR using your template with all provided information
 
 ## 🚀 Usage
+
+
+
+https://github.com/user-attachments/assets/d41693eb-f629-4e57-b149-34e6728e8a2e
 
 ### Method 1: Local Installation
 
