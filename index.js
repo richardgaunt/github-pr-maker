@@ -303,9 +303,18 @@ export async function main() {
     // Check if branch is pushed to remote
     let needsToPush = false;
     if (!isBranchPushedToRemote(currentBranch)) {
-      console.log(`\n🔄 Branch '${currentBranch}' not found on remote. Pushing now...`);
-      needsToPush = true;
+      const shouldPush = await confirm({
+        message: `Branch '${currentBranch}' not found on remote. Push to origin?`,
+        default: true
+      });
 
+      if (!shouldPush) {
+        console.log('\n❌ Cannot create PR without pushing branch to remote.');
+        return;
+      }
+
+      needsToPush = true;
+      console.log(`\n🔄 Pushing branch '${currentBranch}' to remote...`);
       const pushSucceeded = pushBranchToRemote(currentBranch);
       if (!pushSucceeded) {
         console.error('\n❌ Failed to push branch to remote. Cannot create PR.');
