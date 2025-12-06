@@ -18,15 +18,15 @@ const renderFileAsync = promisify(twig.renderFile);
 // Get the three most recent commits
 export function getRecentCommits(count = 3) {
   try {
-    const format = '--pretty=format:%h\\|\\|\\|%s\\|\\|\\|%b';
+    // Use %x00 (null byte) as commit separator to handle multi-line messages
+    const format = '--pretty=format:%h\\|\\|\\|%s%x00';
     const output = execSync(`git log -${count} ${format}`).toString().trim();
 
-    return output.split('\n').map(line => {
-      const [hash, subject, body] = line.split('|||');
+    return output.split('\x00').filter(Boolean).map(line => {
+      const [hash, subject] = line.split('|||');
       return {
         hash,
-        subject,
-        body: body ? body.trim() : ''
+        subject
       };
     });
   } catch (error) {
@@ -239,9 +239,6 @@ export async function main() {
 
   for (const commit of commits) {
     console.log(`\n${commit.hash} ${commit.subject}`);
-    if (commit.body) {
-      console.log(`${commit.body}`);
-    }
 
     const includeCommit = await confirm({
       message: '🔄 Include this commit in PR description?'
