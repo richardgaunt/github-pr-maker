@@ -96,8 +96,9 @@ export function getRemoteBranches() {
 export function isBranchPushedToRemote(branchName) {
   try {
     // Check if the branch exists on the remote
-    execSync(`git ls-remote --heads origin ${branchName}`, { stdio: 'ignore' });
-    return true;
+    const output = execSync(`git ls-remote --heads origin ${branchName}`).toString().trim();
+    // If output is empty, branch doesn't exist on remote
+    return output.length > 0;
   } catch {
     return false;
   }
