@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 import { input, confirm, search } from '@inquirer/prompts';
 import twig from 'twig';
 import { promisify } from 'util';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, realpathSync } from 'fs';
 import path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -115,6 +115,70 @@ export function pushBranchToRemote(branchName) {
   }
 }
 
+// Get the root directory of the current git repository
+export function getRepoRoot() {
+  try {
+    return execSync('git rev-parse --show-toplevel').toString().trim();
+  } catch {
+    return null;
+  }
+}
+
+// Get the path to the state file
+function getStatePath() {
+  const root = getRepoRoot();
+  if (!root) return null;
+  return path.join(root, '.pr-in-progress.json');
+}
+
+const STATE_VERSION = 1;
+const STEP_ORDER = ['ticketNumber', 'prTitle', 'hasTests', 'changes'];
+
+// Check if a step has already been completed relative to the saved step
+export function isStepCompleted(currentStep, savedStep) {
+  const currentIndex = STEP_ORDER.indexOf(currentStep);
+  const savedIndex = STEP_ORDER.indexOf(savedStep);
+  if (currentIndex === -1 || savedIndex === -1) return false;
+  return currentIndex <= savedIndex;
+}
+
+// Load saved state from disk, validated against current branch
+export function loadState(currentBranch) {
+  const statePath = getStatePath();
+  if (!statePath || !existsSync(statePath)) return null;
+
+  try {
+    const raw = readFileSync(statePath, 'utf-8');
+    const state = JSON.parse(raw);
+
+    if (state.version !== STATE_VERSION) return null;
+    if (state.branch !== currentBranch) return null;
+    if (!state.step || !STEP_ORDER.includes(state.step)) return null;
+
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+// Save state to disk
+export function saveState(state) {
+  const statePath = getStatePath();
+  if (!statePath) return;
+  writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n');
+}
+
+// Delete the state file
+export function clearState() {
+  const statePath = getStatePath();
+  if (!statePath) return;
+  try {
+    unlinkSync(statePath);
+  } catch {
+    // File may not exist, that's fine
+  }
+}
+
 // Check if gh CLI is installed
 export function checkGhCli() {
   try {
@@ -210,50 +274,128 @@ export async function main() {
     process.exit(1);
   }
 
-  // Get ticket number and PR title first
-  const ticketNumber = await input({
-    message: '🎫 Ticket number (e.g., JIRA-123, leave empty if none):',
-  });
+  // Get current branch early — needed for state matching
+  const currentBranch = getCurrentBranch();
 
-  const prTitle = await input({
-    message: '📝 Pull Request title:',
-  });
-
-  // Ask about tests
-  const hasTests = await confirm({
-    message: '✅ Does this PR include tests?',
-    default: false
-  });
-
-  // Get recent commits
-  const commits = getRecentCommits(3);
-
-  if (commits.length === 0) {
-    console.error('Error: No commits found');
+  if (!currentBranch) {
+    console.error('\n❌ Failed to determine current branch');
     process.exit(1);
   }
 
-  console.log('\n📝 Recent commits:');
-
-  // Let user review and select commits
-  const changes = [];
-
-  for (const commit of commits) {
-    console.log(`\n${commit.hash} ${commit.subject}`);
-
-    const includeCommit = await confirm({
-      message: '🔄 Include this commit in PR description?'
+  // Check for saved state and offer to resume
+  let state = loadState(currentBranch);
+  if (state) {
+    const resume = await confirm({
+      message: '💾 Resume in-progress PR?',
+      default: true
     });
+    if (!resume) {
+      clearState();
+      state = null;
+    }
+  }
 
-    if (includeCommit) {
-      // Directly present the edit field with default value
-      const message = await input({
-        message: '✏️ Edit description for PR:',
-        default: commit.subject
+  // Initialize state if starting fresh
+  if (!state) {
+    state = {
+      version: 1,
+      branch: currentBranch,
+      step: null,
+      ticketNumber: null,
+      prTitle: null,
+      hasTests: null,
+      changes: null,
+      commitHashes: null,
+    };
+  }
+
+  // --- Step: ticketNumber ---
+  let ticketNumber;
+  if (state.step && isStepCompleted('ticketNumber', state.step)) {
+    ticketNumber = state.ticketNumber;
+    console.log(`🎫 Ticket number: ${ticketNumber || '(none)'}`);
+  } else {
+    ticketNumber = await input({
+      message: '🎫 Ticket number (e.g., JIRA-123, leave empty if none):',
+    });
+    state.ticketNumber = ticketNumber;
+    state.step = 'ticketNumber';
+    saveState(state);
+  }
+
+  // --- Step: prTitle ---
+  let prTitle;
+  if (state.step && isStepCompleted('prTitle', state.step)) {
+    prTitle = state.prTitle;
+    console.log(`📝 PR title: ${prTitle}`);
+  } else {
+    prTitle = await input({
+      message: '📝 Pull Request title:',
+    });
+    state.prTitle = prTitle;
+    state.step = 'prTitle';
+    saveState(state);
+  }
+
+  // --- Step: hasTests ---
+  let hasTests;
+  if (state.step && isStepCompleted('hasTests', state.step)) {
+    hasTests = state.hasTests;
+    console.log(`✅ Includes tests: ${hasTests ? 'yes' : 'no'}`);
+  } else {
+    hasTests = await confirm({
+      message: '✅ Does this PR include tests?',
+      default: false
+    });
+    state.hasTests = hasTests;
+    state.step = 'hasTests';
+    saveState(state);
+  }
+
+  // --- Step: changes (commit selection) ---
+  let changes;
+  if (state.step && isStepCompleted('changes', state.step)) {
+    changes = state.changes;
+    console.log('\n📝 Saved changes:');
+    for (const change of changes) {
+      console.log(`  - ${change}`);
+    }
+  } else {
+    // Get recent commits
+    const commits = getRecentCommits(3);
+
+    if (commits.length === 0) {
+      console.error('Error: No commits found');
+      process.exit(1);
+    }
+
+    console.log('\n📝 Recent commits:');
+
+    changes = [];
+    const commitHashes = [];
+
+    for (const commit of commits) {
+      console.log(`\n${commit.hash} ${commit.subject}`);
+
+      const includeCommit = await confirm({
+        message: '🔄 Include this commit in PR description?'
       });
 
-      changes.push(message);
+      if (includeCommit) {
+        const message = await input({
+          message: '✏️ Edit description for PR:',
+          default: commit.subject
+        });
+
+        changes.push(message);
+        commitHashes.push(commit.hash);
+      }
     }
+
+    state.changes = changes;
+    state.commitHashes = commitHashes;
+    state.step = 'changes';
+    saveState(state);
   }
 
   // Get template and render it
@@ -261,7 +403,6 @@ export async function main() {
 
   let renderedTemplate;
   if (template.isDefault) {
-    // Render the default template string
     renderedTemplate = twig.twig({ data: template.content }).render({
       ticket_number: ticketNumber || '',
       changes,
@@ -269,7 +410,6 @@ export async function main() {
       has_ticket: !!ticketNumber
     });
   } else {
-    // Render from file
     renderedTemplate = await renderFileAsync(template.path, {
       ticket_number: ticketNumber || '',
       changes,
@@ -290,14 +430,6 @@ export async function main() {
   });
 
   if (confirmCreate) {
-    // Get current branch name
-    const currentBranch = getCurrentBranch();
-
-    if (!currentBranch) {
-      console.error('\n❌ Failed to determine current branch');
-      process.exit(1);
-    }
-
     // Check if branch is pushed to remote
     let needsToPush = false;
     if (!isBranchPushedToRemote(currentBranch)) {
@@ -322,14 +454,11 @@ export async function main() {
     }
 
     const defaultBranch = getDefaultBranch();
-    // Default branch gets added to the start of the array.
     const remoteBranches = getRemoteBranches()
       .sort((branchA, branchB) => {
         return (branchA === defaultBranch) ? -1 : (branchB === defaultBranch) ? 1 : branchA.localeCompare(branchB);
       })
       .map(branch => ({ title: branch, value: branch }));
-    // Ask user which branch to target for PR
-    // Default to the repository's default branch
     console.log('\n🌿 Select target branch for PR:');
     const targetBranch = await search({
       message: '🎯 Target branch for PR:',
@@ -343,6 +472,7 @@ export async function main() {
     const result = await createPR(fullTitle, renderedTemplate, targetBranch);
 
     if (result.success) {
+      clearState();
       console.log(`\n✅ Pull Request created successfully: ${result.url}`);
     } else {
       console.error(`\n❌ Failed to create Pull Request: ${result.error}`);
@@ -357,7 +487,9 @@ export async function main() {
 }
 
 // If this file is being run directly, call the main function
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isDirectRun = import.meta.url === `file://${process.argv[1]}`
+  || import.meta.url === `file://${realpathSync(process.argv[1])}`;
+if (isDirectRun) {
   main().catch(error => {
     console.error('An error occurred:', error);
     process.exit(1);

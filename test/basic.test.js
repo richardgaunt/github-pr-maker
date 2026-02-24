@@ -4,7 +4,8 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getRecentCommits, getTemplatePath, getCurrentBranch, isBranchPushedToRemote } from '../index';
+import fs from 'fs';
+import { getRecentCommits, getTemplatePath, getCurrentBranch, isBranchPushedToRemote, isStepCompleted, loadState, saveState, clearState, getRepoRoot } from '../index';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,3 +83,99 @@ function branchPushNeeded(branchName, existsOnRemote) {
   // If branch isn't on remote, need to push
   return !existsOnRemote;
 }
+
+describe('State Persistence', () => {
+  const repoRoot = getRepoRoot();
+  const statePath = repoRoot ? path.join(repoRoot, '.pr-in-progress.json') : null;
+
+  afterEach(() => {
+    // Clean up any state file left by tests
+    if (statePath) {
+      try { fs.unlinkSync(statePath); } catch { /* ignore */ }
+    }
+  });
+
+  describe('isStepCompleted', () => {
+    test('returns true when current step is before saved step', () => {
+      expect(isStepCompleted('ticketNumber', 'prTitle')).toBe(true);
+      expect(isStepCompleted('ticketNumber', 'changes')).toBe(true);
+      expect(isStepCompleted('prTitle', 'hasTests')).toBe(true);
+    });
+
+    test('returns true when current step equals saved step', () => {
+      expect(isStepCompleted('ticketNumber', 'ticketNumber')).toBe(true);
+      expect(isStepCompleted('changes', 'changes')).toBe(true);
+    });
+
+    test('returns false when current step is after saved step', () => {
+      expect(isStepCompleted('prTitle', 'ticketNumber')).toBe(false);
+      expect(isStepCompleted('changes', 'hasTests')).toBe(false);
+    });
+
+    test('returns false for unknown steps', () => {
+      expect(isStepCompleted('unknown', 'prTitle')).toBe(false);
+      expect(isStepCompleted('prTitle', 'unknown')).toBe(false);
+    });
+  });
+
+  describe('saveState / loadState / clearState', () => {
+    const testState = {
+      version: 1,
+      branch: 'test-branch',
+      step: 'prTitle',
+      ticketNumber: 'TEST-1',
+      prTitle: 'Test PR',
+      hasTests: null,
+      changes: null,
+      commitHashes: null,
+    };
+
+    test('saveState writes and loadState reads matching state', () => {
+      saveState(testState);
+      const loaded = loadState('test-branch');
+      expect(loaded).toEqual(testState);
+    });
+
+    test('loadState returns null for branch mismatch', () => {
+      saveState(testState);
+      const loaded = loadState('other-branch');
+      expect(loaded).toBeNull();
+    });
+
+    test('loadState returns null when no file exists', () => {
+      const loaded = loadState('any-branch');
+      expect(loaded).toBeNull();
+    });
+
+    test('loadState returns null for invalid JSON', () => {
+      if (statePath) {
+        fs.writeFileSync(statePath, 'not json');
+        const loaded = loadState('test-branch');
+        expect(loaded).toBeNull();
+      }
+    });
+
+    test('loadState returns null for wrong version', () => {
+      saveState({ ...testState, version: 999 });
+      const loaded = loadState('test-branch');
+      expect(loaded).toBeNull();
+    });
+
+    test('loadState returns null for invalid step', () => {
+      saveState({ ...testState, step: 'bogus' });
+      const loaded = loadState('test-branch');
+      expect(loaded).toBeNull();
+    });
+
+    test('clearState removes the file', () => {
+      saveState(testState);
+      expect(fs.existsSync(statePath)).toBe(true);
+      clearState();
+      expect(fs.existsSync(statePath)).toBe(false);
+    });
+
+    test('clearState does not throw when no file exists', () => {
+      expect(() => clearState()).not.toThrow();
+    });
+  });
+});
