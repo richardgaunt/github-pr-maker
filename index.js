@@ -2,8 +2,7 @@
 
 import { execSync } from 'child_process';
 import { input, confirm, search } from '@inquirer/prompts';
-import twig from 'twig';
-import { promisify } from 'util';
+import nunjucks from 'nunjucks';
 import { existsSync, readFileSync, writeFileSync, unlinkSync, realpathSync } from 'fs';
 import path from 'path';
 import { dirname } from 'path';
@@ -12,8 +11,6 @@ import { fileURLToPath } from 'url';
 // Get the directory of the current module
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-
-const renderFileAsync = promisify(twig.renderFile);
 
 // Get the three most recent commits
 export function getRecentCommits(count = 3) {
@@ -202,10 +199,10 @@ const DEFAULT_TEMPLATE = `{% if has_ticket %}
 
 {% if has_tests %}
 ## Tests
-- ✅ Includes tests
+- Includes tests
 {% else %}
 ## Tests
-- ❌ No tests included
+- No tests included
 {% endif %}
 `;
 
@@ -221,7 +218,7 @@ function getScriptDir() {
 export function getTemplatePath() {
   // Get template ONLY from the script's installation directory
   const scriptDir = getScriptDir();
-  const templatePath = path.join(scriptDir, 'templates', 'PULL_REQUEST_TEMPLATE.twig');
+  const templatePath = path.join(scriptDir, 'templates', 'PULL_REQUEST_TEMPLATE.njk');
 
   // Check if template exists in the app installation directory
   if (!existsSync(templatePath)) {
@@ -401,21 +398,18 @@ export async function main() {
   // Get template and render it
   const template = getTemplatePath();
 
+  const templateData = {
+    ticket_number: ticketNumber || '',
+    changes,
+    has_tests: hasTests,
+    has_ticket: !!ticketNumber
+  };
+
   let renderedTemplate;
   if (template.isDefault) {
-    renderedTemplate = twig.twig({ data: template.content }).render({
-      ticket_number: ticketNumber || '',
-      changes,
-      has_tests: hasTests,
-      has_ticket: !!ticketNumber
-    });
+    renderedTemplate = nunjucks.renderString(template.content, templateData);
   } else {
-    renderedTemplate = await renderFileAsync(template.path, {
-      ticket_number: ticketNumber || '',
-      changes,
-      has_tests: hasTests,
-      has_ticket: !!ticketNumber
-    });
+    renderedTemplate = nunjucks.render(template.path, templateData);
   }
 
   console.log('\n📋 PR Preview:');

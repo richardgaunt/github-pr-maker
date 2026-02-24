@@ -10,7 +10,7 @@
 {% else %}
 - [x] This PR does not have an associated ticket
 {% endif %}
-- [{% if changes|length > 0 %}x{% else %} {% endif %}] I have provided information in `Changed` section about WHY something was done if this was not a normal implementation
+- [{% if changes.length > 0 %}x{% else %} {% endif %}] I have provided information in `Changed` section about WHY something was done if this was not a normal implementation
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [{% if has_tests %}x{% else %} {% endif %}] I have added tests that prove my fix is effective or that my feature works
@@ -18,10 +18,8 @@
 - [ ] I have provided screenshots, where applicable
 
 ## Changed
-{% set count = 1 %}
 {% for change in changes %}
-{{ count }}. {{ change }}
-{% set count = count + 1 %}
+{{ loop.index }}. {{ change }}
 {% endfor %}
 
 ## Screenshots

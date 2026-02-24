@@ -31,7 +31,7 @@ describe('GitHub PR Maker', () => {
     if (template.isDefault) {
       expect(template.content).toBeDefined();
     } else {
-      expect(template.path.endsWith('PULL_REQUEST_TEMPLATE.twig')).toBe(true);
+      expect(template.path.endsWith('PULL_REQUEST_TEMPLATE.njk')).toBe(true);
     }
   });
 
