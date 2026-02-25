@@ -1,15 +1,14 @@
-{% if has_ticket %}
+{% if has_ticket -%}
 ## JIRA ticket: {{ ticket_number }}
-{% endif %}
 
+{% endif -%}
 ## Checklist before requesting a review
-
-{% if has_ticket %}
+{% if has_ticket -%}
 - [x] I have formatted the subject to include ticket number as `[JIRA-123] Verb in past tense with dot at the end.`
 - [x] I have added a link to the issue tracker
-{% else %}
+{% else -%}
 - [x] This PR does not have an associated ticket
-{% endif %}
+{% endif -%}
 - [{% if changes.length > 0 %}x{% else %} {% endif %}] I have provided information in `Changed` section about WHY something was done if this was not a normal implementation
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -18,8 +17,7 @@
 - [ ] I have provided screenshots, where applicable
 
 ## Changed
-{% for change in changes %}
+{% for change in changes -%}
 {{ loop.index }}. {{ change }}
 {% endfor %}
-
 ## Screenshots
