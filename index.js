@@ -409,7 +409,8 @@ export async function main() {
   if (template.isDefault) {
     renderedTemplate = nunjucks.renderString(template.content, templateData);
   } else {
-    renderedTemplate = nunjucks.render(template.path, templateData);
+    const templateContent = readFileSync(template.path, 'utf8');
+    renderedTemplate = nunjucks.renderString(templateContent, templateData);
   }
 
   console.log('\n📋 PR Preview:');
