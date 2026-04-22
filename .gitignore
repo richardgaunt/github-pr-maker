@@ -1,3 +1,4 @@
 **/.claude/settings.local.json
 .pr-in-progress.json
+node_modules
 tickets
