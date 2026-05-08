@@ -5,7 +5,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { getRecentCommits, getTemplatePath, getCurrentBranch, isBranchPushedToRemote, isStepCompleted, loadState, saveState, clearState, getRepoRoot } from '../index';
+import { getRecentCommits, getTemplatePath, getCurrentBranch, isBranchPushedToRemote, isStepCompleted, loadState, saveState, clearState, getRepoRoot, getRepoLabels, getRepoCollaborators, getCurrentGhUser } from '../index';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +16,9 @@ describe('GitHub PR Maker', () => {
     expect(typeof getTemplatePath).toBe('function');
     expect(typeof getCurrentBranch).toBe('function');
     expect(typeof isBranchPushedToRemote).toBe('function');
+    expect(typeof getRepoLabels).toBe('function');
+    expect(typeof getRepoCollaborators).toBe('function');
+    expect(typeof getCurrentGhUser).toBe('function');
   });
 
   // This test relies on implementation details, so it's a bit fragile
@@ -49,6 +52,27 @@ describe('GitHub PR Maker', () => {
 
     // Test without ticket number (undefined)
     expect(ticketNumberFormat(undefined, 'Add feature')).toBe('Add feature');
+  });
+
+  test('getRepoLabels returns an array of strings', () => {
+    const labels = getRepoLabels();
+    expect(Array.isArray(labels)).toBe(true);
+    for (const label of labels) {
+      expect(typeof label).toBe('string');
+    }
+  });
+
+  test('getRepoCollaborators returns an array of strings', () => {
+    const collaborators = getRepoCollaborators();
+    expect(Array.isArray(collaborators)).toBe(true);
+    for (const collaborator of collaborators) {
+      expect(typeof collaborator).toBe('string');
+    }
+  });
+
+  test('getCurrentGhUser returns a string or null', () => {
+    const user = getCurrentGhUser();
+    expect(user === null || typeof user === 'string').toBe(true);
   });
 
   test('Branch remote push checks work correctly', () => {
@@ -100,16 +124,19 @@ describe('State Persistence', () => {
       expect(isStepCompleted('ticketNumber', 'prTitle')).toBe(true);
       expect(isStepCompleted('ticketNumber', 'changes')).toBe(true);
       expect(isStepCompleted('prTitle', 'hasTests')).toBe(true);
+      expect(isStepCompleted('changes', 'labels')).toBe(true);
     });
 
     test('returns true when current step equals saved step', () => {
       expect(isStepCompleted('ticketNumber', 'ticketNumber')).toBe(true);
       expect(isStepCompleted('changes', 'changes')).toBe(true);
+      expect(isStepCompleted('labels', 'labels')).toBe(true);
     });
 
     test('returns false when current step is after saved step', () => {
       expect(isStepCompleted('prTitle', 'ticketNumber')).toBe(false);
       expect(isStepCompleted('changes', 'hasTests')).toBe(false);
+      expect(isStepCompleted('labels', 'changes')).toBe(false);
     });
 
     test('returns false for unknown steps', () => {
@@ -120,7 +147,7 @@ describe('State Persistence', () => {
 
   describe('saveState / loadState / clearState', () => {
     const testState = {
-      version: 1,
+      version: 2,
       branch: 'test-branch',
       step: 'prTitle',
       ticketNumber: 'TEST-1',
@@ -128,6 +155,8 @@ describe('State Persistence', () => {
       hasTests: null,
       changes: null,
       commitHashes: null,
+      labels: null,
+      reviewers: null,
     };
 
     test('saveState writes and loadState reads matching state', () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { input, confirm, search } from '@inquirer/prompts';
+import { input, confirm, search, checkbox } from '@inquirer/prompts';
 import nunjucks from 'nunjucks';
 import { existsSync, readFileSync, writeFileSync, unlinkSync, realpathSync } from 'fs';
 import path from 'path';
@@ -128,8 +128,8 @@ function getStatePath() {
   return path.join(root, '.pr-in-progress.json');
 }
 
-const STATE_VERSION = 1;
-const STEP_ORDER = ['ticketNumber', 'prTitle', 'hasTests', 'changes'];
+const STATE_VERSION = 2;
+const STEP_ORDER = ['ticketNumber', 'prTitle', 'hasTests', 'changes', 'labels', 'reviewers'];
 
 // Check if a step has already been completed relative to the saved step
 export function isStepCompleted(currentStep, savedStep) {
@@ -186,6 +186,37 @@ export function checkGhCli() {
   }
 }
 
+// Get available labels from the repository
+export function getRepoLabels() {
+  try {
+    const output = execSync('gh label list --json name --limit 100').toString().trim();
+    const labels = JSON.parse(output);
+    return labels.map(l => l.name);
+  } catch {
+    return [];
+  }
+}
+
+// Get the current authenticated GitHub user
+export function getCurrentGhUser() {
+  try {
+    return execSync('gh api user --jq .login').toString().trim();
+  } catch {
+    return null;
+  }
+}
+
+// Get collaborators from the repository (people who can review PRs)
+export function getRepoCollaborators() {
+  try {
+    const output = execSync('gh api repos/:owner/:repo/collaborators --jq .[].login').toString().trim();
+    if (!output) return [];
+    return output.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // Default PR template content as a fallback
 const DEFAULT_TEMPLATE = `{% if has_ticket %}
 ## Ticket
@@ -232,14 +263,27 @@ export function getTemplatePath() {
 }
 
 // Create PR using GitHub CLI
-export async function createPR(title, body, targetBranch = null) {
+export async function createPR(title, body, targetBranch = null, labels = [], reviewers = []) {
   try {
     // Build the command with optional target branch
     let command = `gh pr create --title "${title}" --body "${body.replace(/"/g, '\\"')}"`;
 
+    // Always self-assign the PR
+    command += ' --assignee "@me"';
+
     // Add target branch if specified
     if (targetBranch) {
       command += ` --base "${targetBranch}"`;
+    }
+
+    // Add labels if specified
+    for (const label of labels) {
+      command += ` --label "${label}"`;
+    }
+
+    // Add reviewers if specified
+    for (const reviewer of reviewers) {
+      command += ` --reviewer "${reviewer}"`;
     }
 
     const output = execSync(command).toString().trim();
@@ -295,7 +339,7 @@ export async function main() {
   // Initialize state if starting fresh
   if (!state) {
     state = {
-      version: 1,
+      version: STATE_VERSION,
       branch: currentBranch,
       step: null,
       ticketNumber: null,
@@ -303,6 +347,8 @@ export async function main() {
       hasTests: null,
       changes: null,
       commitHashes: null,
+      labels: null,
+      reviewers: null,
     };
   }
 
@@ -395,6 +441,75 @@ export async function main() {
     saveState(state);
   }
 
+  // --- Step: labels ---
+  let labels = [];
+  if (state.step && isStepCompleted('labels', state.step)) {
+    labels = state.labels || [];
+    if (labels.length > 0) {
+      console.log(`\n🏷️  Labels: ${labels.join(', ')}`);
+    } else {
+      console.log('\n🏷️  Labels: (none)');
+    }
+  } else {
+    const availableLabels = getRepoLabels();
+    if (availableLabels.length === 0) {
+      console.log('\n🏷️  No labels found in this repository, skipping.');
+    } else {
+      labels = await checkbox({
+        message: '🏷️  Select labels for this PR:',
+        choices: availableLabels.map(name => ({ name, value: name })),
+      });
+    }
+    state.labels = labels;
+    state.step = 'labels';
+    saveState(state);
+  }
+
+  // --- Step: reviewers ---
+  let reviewers = [];
+  if (state.step && isStepCompleted('reviewers', state.step)) {
+    reviewers = state.reviewers || [];
+    if (reviewers.length > 0) {
+      console.log(`\n👥 Reviewers: ${reviewers.join(', ')}`);
+    } else {
+      console.log('\n👥 Reviewers: (none)');
+    }
+  } else {
+    const currentUser = getCurrentGhUser();
+    const collaborators = getRepoCollaborators()
+      .filter(login => login !== currentUser);
+    if (collaborators.length === 0) {
+      console.log('\n👥 No reviewers available in this repository, skipping.');
+    } else {
+      const NO_REVIEWER = '__none__';
+      let selecting = true;
+      while (selecting) {
+        const remaining = collaborators.filter(login => !reviewers.includes(login));
+        const choices = [
+          { name: 'No reviewer', value: NO_REVIEWER },
+          ...remaining.map(login => ({ name: login, value: login })),
+        ];
+        const selected = await search({
+          message: reviewers.length > 0
+            ? `👥 Add another reviewer? (selected: ${reviewers.join(', ')})`
+            : '👥 Search for a reviewer:',
+          source: (input = '') => choices.filter(c => c.name.toLowerCase().includes(input.toLowerCase())),
+        });
+        if (selected === NO_REVIEWER) {
+          selecting = false;
+        } else {
+          reviewers.push(selected);
+          if (remaining.length <= 1) {
+            selecting = false;
+          }
+        }
+      }
+    }
+    state.reviewers = reviewers;
+    state.step = 'reviewers';
+    saveState(state);
+  }
+
   // Get template and render it
   const template = getTemplatePath();
 
@@ -415,6 +530,12 @@ export async function main() {
 
   console.log('\n📋 PR Preview:');
   console.log(`Title: ${ticketNumber ? `[${ticketNumber}] ` : ''}${prTitle}`);
+  if (labels.length > 0) {
+    console.log(`Labels: ${labels.join(', ')}`);
+  }
+  if (reviewers.length > 0) {
+    console.log(`Reviewers: ${reviewers.join(', ')}`);
+  }
   console.log('\nBody:');
   console.log(renderedTemplate);
 
@@ -464,7 +585,7 @@ export async function main() {
     console.log(`📌 Creating PR targeting branch: ${targetBranch}`);
 
     const fullTitle = ticketNumber ? `[${ticketNumber}] ${prTitle}` : prTitle;
-    const result = await createPR(fullTitle, renderedTemplate, targetBranch);
+    const result = await createPR(fullTitle, renderedTemplate, targetBranch, labels, reviewers);
 
     if (result.success) {
       clearState();
